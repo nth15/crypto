@@ -59,6 +59,19 @@ def decode_pubkey(pub, formt=None):
         return (decode(pub[:64], 16), decode(pub[64:128], 16))
     else: raise Exception("Invalid format!")
 
+def decode_privkey(priv,formt=None):
+    if not formt: formt = get_privkey_format(priv)
+    if formt == 'decimal': return priv
+    elif formt == 'bin': return decode(priv, 256)
+    elif formt == 'bin_compressed': return decode(priv[:32], 256)
+    elif formt == 'hex': return decode(priv, 16)
+    elif formt == 'hex_compressed': return decode(priv[:64], 16)
+    elif formt == 'wif': return decode(b58check_to_bin(priv),256)
+    elif formt == 'wif_compressed':
+        return decode(b58check_to_bin(priv)[:32],256)
+    else: raise Exception("WIF does not represent privkey")
+
+
 def decode(string, base):
 	if base == 256 and isinstance(string, str):
 		string = bytes(bytearray.fromhex(string))
@@ -80,11 +93,68 @@ def decode(string, base):
 		string = string[1:]
 	return result
 
+def get_privkey_format(priv):
+    if priv.isdigit(): return 'decimal'
+    elif len(priv) == 32: return 'bin'
+    elif len(priv) == 33: return 'bin_compressed'
+    elif len(priv) == 64: return 'hex'
+    elif len(priv) == 66: return 'hex_compressed'
+    else:
+        bin_p = b58check_to_bin(priv)
+        if len(bin_p) == 32: return 'wif'
+        elif len(bin_p) == 33: return 'wif_compressed'
+        else: raise Exception("WIF does not represent privkey")
+
 def get_code_string(base):
 	if base in code_strings:
 		return code_strings[base]
 	else:
 		raise ValueError("Invalid base!")
+
+def b58check_to_bin(inp):
+    leadingzbytes = len(re.match('^1*', inp).group(0))
+    data = b'\x00' * leadingzbytes + changebase(inp, 58, 256)
+    assert bin_dbl_sha256(data[:-4])[:4] == data[-4:]
+    return data[1:-4]
+
+def changebase(string, frm, to, minlen=0):
+	if frm == to:
+		return lpad(string, get_code_string(frm)[0], minlen)
+	return encode(decode(string, frm), to, minlen)
+
+def bin_dbl_sha256(s):
+	bytes_to_hash = from_string_to_bytes(s)
+	return hashlib.sha256(hashlib.sha256(bytes_to_hash).digest()).digest()
+
+def from_string_to_bytes(a):
+	return a if isinstance(a, bytes) else bytes(a, 'utf-8')
+
+
+def lpad(msg, symbol, length):
+	if len(msg) >= length:
+		return msg
+	return symbol * (length - len(msg)) + msg
+
+def encode(val, base, minlen=0):
+	base, minlen = int(base), int(minlen)
+	code_string = get_code_string(base)
+	result_bytes = bytes()
+	while val > 0:
+		curcode = code_string[val % base]
+		result_bytes = bytes([ord(curcode)]) + result_bytes
+		val //= base
+
+	pad_size = minlen - len(result_bytes)
+
+	padding_element = b'\x00' if base == 256 else b'1' \
+		if base == 58 else b'0'
+	if (pad_size > 0):
+		result_bytes = padding_element*pad_size + result_bytes
+
+	result_string = ''.join([chr(y) for y in result_bytes])
+	result = result_bytes if base == 256 else result_string
+
+	return result
 
 #------------------------------------
 #curve configuration
@@ -127,8 +197,6 @@ print("plain coordinates: ",plain_coordinates)
 
 pub = '043e6fbace2ef2ebff56166806ff1d4568ec356edbc0bf97e6fe675f179a017a5af6b0cf80c897ae09a8117392cf8d0f930d494af5b57e2f81518adeeaf6431e1a'
 
-secretKey = 75263518707598184987916378021939673586055614731957507592904438851787542395619
-
 publicKey = decode_pubkey(pub)
 
 print("\npublic key: ",publicKey)
@@ -157,32 +225,6 @@ print("--------------------------------------------------------------")
 
 decryption_begins = time.time()
 
-#secret key times c1
-dx, dy = EccCore.applyDoubleAndAddMethod(c1[0], c1[1], secretKey, a, b, mod)
-#-secret key times c1
-dy = dy * -1 #curve is symmetric about x-axis. in this way, inverse point found
-
-#c2 + secret key * (-c1)
-decrypted = EccCore.pointAddition(c2[0], c2[1], dx, dy, a, b, mod)
-print("decrypted coordinates: ",decrypted)
-	
-#-----------------------------------
-
-decrytion_begin = time.time()
-new_point = EccCore.pointAddition(base_point[0], base_point[1], base_point[0], base_point[1], a, b, mod) #2P
-
-#brute force method
-for i in range(3, order):
-	new_point = EccCore.pointAddition(new_point[0], new_point[1], base_point[0], base_point[1], a, b, mod)
-	if new_point[0] == decrypted[0] and new_point[1] == decrypted[1]:
-		
-		print("decrypted message as numeric: ",i)
-		print("decrypted message: ",intToText(i))
-		
-		break
-
-decrytion_end = time.time()
-print("decryption lasts ",decrytion_end-decrytion_begin," seconds")
 
 def encrypt(public_key, message):
 	# Initialize the elliptic curve
@@ -198,10 +240,57 @@ def encrypt(public_key, message):
 	base_point = [55066263022277343669578718895168534326250603453777594175500187360389116729240, 32670510020758816978083085130507043184471273380659243275938904335757337482424]
 
 	# Convert the public_key to coords on x and y
-
-
-	# Message reperesened as coordinates
-
+		
+	message = 'hi'
 	plaintext = textToInt(message)
+	print("message: ",message,". it is numeric matching is ",plaintext)
+
 	plain_coordinates = EccCore.applyDoubleAndAddMethod(base_point[0], base_point[1], plaintext, a, b, mod)
+
+	print("message is represented as the following point coordinates")
+	print("plain coordinates: ",plain_coordinates)
+
+	pub = '043e6fbace2ef2ebff56166806ff1d4568ec356edbc0bf97e6fe675f179a017a5af6b0cf80c897ae09a8117392cf8d0f930d494af5b57e2f81518adeeaf6431e1a'
+
+	publicKey = decode_pubkey(pub)
+
+	randomKey = 28695618543805844332113829720373285210420739438570883203839696518176414791234
+	#import random
+	#randomKey = random.getrandbits(128)
+
+	c1 = EccCore.applyDoubleAndAddMethod(base_point[0], base_point[1], randomKey, a, b, mod)
+
+	c2 = EccCore.applyDoubleAndAddMethod(publicKey[0], publicKey[1], randomKey, a, b, mod)
+	c2 = EccCore.pointAddition(c2[0], c2[1], plain_coordinates[0], plain_coordinates[1], a, b, mod)
+	
+def decrypt(priv_key, message):	
+	priv = '69zzh19MGx1eXmwXesokVyzv9QFitn11mZzcCfPhhBAhLMKuesM'
+	#secretKey = 75263518707598184987916378021939673586055614731957507592904438851787542395619
+	secretKey = decode_privkey(priv)
+	#secret key times c1
+	dx, dy = EccCore.applyDoubleAndAddMethod(c1[0], c1[1], secretKey, a, b, mod)
+	#-secret key times c1
+	dy = dy * -1 #curve is symmetric about x-axis. in this way, inverse point found
+
+	#c2 + secret key * (-c1)
+	decrypted = EccCore.pointAddition(c2[0], c2[1], dx, dy, a, b, mod)
+	print("decrypted coordinates: ",decrypted)
+		
+	#-----------------------------------
+
+	decrytion_begin = time.time()
+	new_point = EccCore.pointAddition(base_point[0], base_point[1], base_point[0], base_point[1], a, b, mod) #2P
+
+	#brute force method
+	for i in range(3, order):
+		new_point = EccCore.pointAddition(new_point[0], new_point[1], base_point[0], base_point[1], a, b, mod)
+		if new_point[0] == decrypted[0] and new_point[1] == decrypted[1]:
+			
+			print("decrypted message as numeric: ",i)
+			print("decrypted message: ",intToText(i))
+			
+			break
+
+	decrytion_end = time.time()
+	print("decryption lasts ",decrytion_end-decrytion_begin," seconds")
 
