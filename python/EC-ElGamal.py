@@ -7,6 +7,7 @@ import base64
 import time
 import random
 import hmac
+import sys, getopt
 
 
 code_strings = {
@@ -155,44 +156,39 @@ def encode(val, base, minlen=0):
 
 	return result
 
-def encrypt(public_key, message):
-	# Initialize the elliptic curve
-	mod = pow(2, 256) - pow(2, 32) - pow(2, 9) - pow(2, 8) - pow(2, 7) - pow(2, 6) - pow(2, 4) - pow(2, 0)
-	order = 115792089237316195423570985008687907852837564279074904382605163141518161494337
 
-	#curve configuration
-	# y^2 = x^3 + a*x + b = y^2 = x^3 + 7
-	a = 0
-	b = 7
 
-	#base point on the curve
-	base_point = [55066263022277343669578718895168534326250603453777594175500187360389116729240, 32670510020758816978083085130507043184471273380659243275938904335757337482424]
-
-	# Convert the public_key to coords on x and y
-		
-	message = 'hi'
+def encrypt(public_key, message, mod, a, b, base_point):
+	# Changes string to int
 	plaintext = textToInt(message)
-	print("message: ",message,". it is numeric matching is ",plaintext)
 
 	plain_coordinates = EccCore.applyDoubleAndAddMethod(base_point[0], base_point[1], plaintext, a, b, mod)
 
 	print("message is represented as the following point coordinates")
-	print("plain coordinates: ",plain_coordinates)
+	print("plain coordinates: ", plain_coordinates)
 
-	pub = '043e6fbace2ef2ebff56166806ff1d4568ec356edbc0bf97e6fe675f179a017a5af6b0cf80c897ae09a8117392cf8d0f930d494af5b57e2f81518adeeaf6431e1a'
-
-	publicKey = decode_pubkey(pub)
+	publicKey = decode_pubkey(public_key)
 
 	randomKey = 28695618543805844332113829720373285210420739438570883203839696518176414791234
 	#import random
 	#randomKey = random.getrandbits(128)
 
 	c1 = EccCore.applyDoubleAndAddMethod(base_point[0], base_point[1], randomKey, a, b, mod)
-
 	c2 = EccCore.applyDoubleAndAddMethod(publicKey[0], publicKey[1], randomKey, a, b, mod)
-	c2 = EccCore.pointAddition(c2[0], c2[1], plain_coordinates[0], plain_coordinates[1], a, b, mod)
+	c2 = EccCore.pointAddition(c2[0], c2[1], plain_coordinates[0], plain_coordinates[1], a, b, mod)		
 	
-def decrypt(priv_key, message):	
+	print("c1: ", c1)
+	print("c2: ", c2)
+	wrt_list = []
+	wrt_list.append(c1)
+	wrt_list.append(c2)
+	
+	with open('nytt_file.txt', 'w') as f:
+		for item in wrt_list:
+			f.write("%s\n" % item)
+
+	
+def decrypt(priv_key, message, mod, order, a, b, base_point):	
 	secretKey = decode_privkey(priv_key)
 	#secret key times c1
 	dx, dy = EccCore.applyDoubleAndAddMethod(c1[0], c1[1], secretKey, a, b, mod)
@@ -203,9 +199,7 @@ def decrypt(priv_key, message):
 	decrypted = EccCore.pointAddition(c2[0], c2[1], dx, dy, a, b, mod)
 	print("decrypted coordinates: ",decrypted)
 		
-	#-----------------------------------
 
-	decrytion_begin = time.time()
 	new_point = EccCore.pointAddition(base_point[0], base_point[1], base_point[0], base_point[1], a, b, mod) #2P
 
 	#brute force method
@@ -218,12 +212,24 @@ def decrypt(priv_key, message):
 			
 			break
 
-	decrytion_end = time.time()
-	print("decryption lasts ",decrytion_end-decrytion_begin," seconds")
 
-def main(fun, key, mess):
+def main(argv):
+	fun = argv[0]
+	key = argv[1]
+	mess = argv[2]
+	# Initialize the elliptic curve
+	mod = pow(2, 256) - pow(2, 32) - pow(2, 9) - pow(2, 8) - pow(2, 7) - pow(2, 6) - pow(2, 4) - pow(2, 0)
+	order = 115792089237316195423570985008687907852837564279074904382605163141518161494337
+	a = 0
+	b = 7
+	base_point = [55066263022277343669578718895168534326250603453777594175500187360389116729240, 32670510020758816978083085130507043184471273380659243275938904335757337482424]
+
+	print('herna')
 	if fun in ['encrypt', 'e']:
-		encrypt(key, mess)
+		encrypt(key, mess, mod, a, b, base_point)
 	elif fun in ['decrypt', 'd']:
-		decrypt(key, mess)
-	else print('Invalid')
+		decrypt(key, mess, mod, order, a, b, base_point)
+	else: print('Invalid')
+
+if __name__== "__main__":
+	main(sys.argv[1:])
