@@ -191,9 +191,19 @@ def encrypt(public_key, message, mod, a, b, base_point):
 	MyFile.close()
 
 	print('Encrypted coordinates outputted to output.txt')
-
 	
 def decrypt(priv_key, message, mod, order, a, b, base_point):	
+	lines = []
+	with open(message + '.txt') as f:
+		lines = f.read().splitlines()
+	
+	c1 ,c2 = [], []
+	c1.append(int(lines[0]))
+	c1.append(int(lines[1]))
+	c2.append(int(lines[2]))
+	c2.append(int(lines[3]))
+	print(c1,c2)
+
 	secretKey = decode_privkey(priv_key)
 	#secret key times c1
 	dx, dy = EccCore.applyDoubleAndAddMethod(c1[0], c1[1], secretKey, a, b, mod)
@@ -220,7 +230,7 @@ def decrypt(priv_key, message, mod, order, a, b, base_point):
 # to encrypt: 
 # EC-ElGamal.py e [public key] [message]
 # to decrypt:
-# EC-ElGamal.py d [private key] [encrypted coords file (output file from encryption)]
+# EC-ElGamal.py d [private key] [name of encrypted coords file (output file from encryption)]
 def main(argv):
 	fun = argv[0]
 	key = argv[1]
