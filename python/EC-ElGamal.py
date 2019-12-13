@@ -164,9 +164,6 @@ def encrypt(public_key, message, mod, a, b, base_point):
 
 	plain_coordinates = EccCore.applyDoubleAndAddMethod(base_point[0], base_point[1], plaintext, a, b, mod)
 
-	print("message is represented as the following point coordinates")
-	print("plain coordinates: ", plain_coordinates)
-
 	publicKey = decode_pubkey(public_key)
 
 	randomKey = 28695618543805844332113829720373285210420739438570883203839696518176414791234
@@ -179,13 +176,21 @@ def encrypt(public_key, message, mod, a, b, base_point):
 	
 	print("c1: ", c1)
 	print("c2: ", c2)
-	wrt_list = []
-	wrt_list.append(c1)
-	wrt_list.append(c2)
-	
-	with open('nytt_file.txt', 'w') as f:
-		for item in wrt_list:
-			f.write("%s\n" % item)
+	MyList = []
+
+	for i in c1:
+		MyList.append(i)
+	for i in c2:
+		MyList.append(i)
+
+	# Output coords to a file c1 first two c2 second two
+	MyFile=open('output.txt','w')
+	for element in MyList:
+		MyFile.write(str(element))
+		MyFile.write('\n')
+	MyFile.close()
+
+	print('Encrypted coordinates outputted to output.txt')
 
 	
 def decrypt(priv_key, message, mod, order, a, b, base_point):	
@@ -212,7 +217,10 @@ def decrypt(priv_key, message, mod, order, a, b, base_point):
 			
 			break
 
-
+# to encrypt: 
+# EC-ElGamal.py e [public key] [message]
+# to decrypt:
+# EC-ElGamal.py d [private key] [encrypted coords file (output file from encryption)]
 def main(argv):
 	fun = argv[0]
 	key = argv[1]
@@ -224,7 +232,6 @@ def main(argv):
 	b = 7
 	base_point = [55066263022277343669578718895168534326250603453777594175500187360389116729240, 32670510020758816978083085130507043184471273380659243275938904335757337482424]
 
-	print('herna')
 	if fun in ['encrypt', 'e']:
 		encrypt(key, mess, mod, a, b, base_point)
 	elif fun in ['decrypt', 'd']:
